@@ -1,0 +1,12 @@
+## Buat BT
+request payload buat request bikin room atau join = 
+{
+    "type": str = (create/join):
+    "id": str = user idnya luh bikin terserah pake uuid ato apa
+    "room_id" = kalo lu mau join room sediain ini
+}
+
+=== TODO ===
+1. Stop duplicate users from joining.
+
+2. Implement "offer", "answer", and "candidate" handling. 

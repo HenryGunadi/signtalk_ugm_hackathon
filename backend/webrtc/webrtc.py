@@ -17,6 +17,8 @@ class VideoStreamTrack(MediaStreamTrack):
 async def connect(peer_connection: RTCPeerConnection):
     offer = await peer_connection.createOffer()
     await peer_connection.setLocalDescription(offer)
+
+    
     
 
 async def main():

@@ -1,9 +1,17 @@
 from flask import Flask, request, jsonify
 from aiortc import RTCPeerConnection, MediaStreamTrack
 from flask_sockets import Sockets
+from flask_cors import CORS
 
 app = Flask(__name__)
 sockets = Sockets(app)
+
+CORS(
+    app,
+    resources={r"/*": {"origins": "*"}}, 
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "PUT", "DELETE"],
+)
 
 @sockets.route("/ws")
 def echo_socket(ws):
