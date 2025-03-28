@@ -7,6 +7,13 @@ request payload buat request bikin room atau join =
 }
 
 === TODO ===
-1. Stop duplicate users from joining.
+Note -> Demo for peer to peer connection only ( 2 users ) 
+1. Stop duplicate users from joining. -> DONE
 
-2. Implement "offer", "answer", and "candidate" handling. 
+2. Implement "offer", "answer", and "candidate" handling.
+    - How do we handle if and only if there more than 1 users in a room and also the websocket
+      loop problem
+
+3. Handle if no one in the room then delete room from App 
+
+4. In call method
