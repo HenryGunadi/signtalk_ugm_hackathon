@@ -15,12 +15,17 @@ async def sendError(websocket: ServerConnection, message: str):
 
     await websocket.send(json.dumps(event))
 
-async def broadcastMessage(room: 'Room', message, *args) -> None:
+def broadcastMessage(room: 'Room', message, *args) -> None:
+    print("Message in broadcast : ", message)
+    print("Message type : ", type(message))
+
     try:
         # broadcast to other people excluding the user itself
         if args is not None:
-            excluded_user = args[0]
-            broadcast(list(filter(lambda user: user.websocket != excluded_user, room.connected_participants)), message)
+            excluded_users: List[User] = list(filter(lambda user: user.websocket != args[0], room.connected_participants))
+            excluded_websockets = [user.websocket for user in excluded_users]
+
+            broadcast(excluded_websockets, json.dumps(message))
         else:
             # broadcast to all users in the room
             broadcast([user.websocket for user in room.connected_participants], message)
@@ -28,7 +33,7 @@ async def broadcastMessage(room: 'Room', message, *args) -> None:
         print(f"Message is incorrect type")
         raise
     except Exception as e:
-        print(f"Unexpected error : {e}")
+        print(f"Broadcast error unexpectedly : {e}") 
         raise
     
 # === Classes ===
@@ -99,7 +104,11 @@ class User():
                 """
 
                 # # DEMO WITH SIMPLE TEXTS
-                await broadcastMessage(self.room, data["message"], self.websocket)
+                broadcastMessage(self.room, data["message"], self.websocket)
+                # another_user = next((user for user in self.room.connected_participants if user.websocket != self.websocket))
+
+                # TESTING
+                # await self.websocket.send(json.dumps(data['message']))
                 print("sent!")
         except Exception as e:
             print(f"Unexpected error in inCall: {e}")
