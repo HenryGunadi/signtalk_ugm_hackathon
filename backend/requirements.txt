@@ -2,7 +2,7 @@ flask
 flask-cors
 flask-sockets
 supabase
-uvicorn
+gunicorn
 websockets
 python-dotenv
 aiortc
