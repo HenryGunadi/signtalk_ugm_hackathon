@@ -1,4 +1,9 @@
-websockets
-gunicorn
-Flask
+flask
+flask-cors
+flask-sockets
 supabase
+uvicorn
+websockets
+python-dotenv
+aiortc
+opencv-python
