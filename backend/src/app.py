@@ -1,0 +1,53 @@
+from dotenv import load_dotenv
+load_dotenv()
+
+from flask import Flask, request, jsonify, render_template
+# from aiortc import RTCPeerConnection, MediaStreamTrack
+from flask_sockets import Sockets
+from flask_cors import CORS
+import os
+from supabase import create_client 
+
+url = os.environ.get("SUPABASE_URL")
+key = os.environ.get("SUPABASE_KEY")
+
+supabase = create_client(url, key)
+
+app = Flask(__name__, template_folder="templates")
+# # sockets = Sockets(app)
+
+# cors settings
+CORS(
+    app,
+    resources={r"/*": {"origins": "*"}}, 
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "PUT", "DELETE"],
+)
+
+# # @sockets.route("/ws")
+# # def echo_socket(ws):
+# #     while not ws.closed:
+# #         message = ws.receive()
+# #         ws.send(message)
+
+# # @app.route("/offer", methods=["POST"])
+# # def handle_offer():
+# #     offer = request.json['sdp']
+# #     pc = RTCPeerConnection()
+# #     pc.setRemoteDescription(offer)
+
+# #     # create an answer
+# #     answer = pc.createAnswer()
+# #     pc.setLocalDescription(answer)
+# #     return jsonify({'sdp' : pc.localDescription.sdp})
+
+@app.route("/")
+def index():
+    response = supabase.table("meeting_rooms").select("name").eq("name", "testing").execute()
+    data = response.data
+    print("Current working directory:", os.getcwd())  # Print working directory
+    print("Templates folder exists:", os.path.exists("templates/index.html"))  # Check if file exists
+    return render_template("index.html", meetings=data)
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
