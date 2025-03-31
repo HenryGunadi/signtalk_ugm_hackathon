@@ -18,9 +18,6 @@ async def connect(peer_connection: RTCPeerConnection):
     offer = await peer_connection.createOffer()
     await peer_connection.setLocalDescription(offer)
 
-    
-    
-
 async def main():
     peer_connection = RTCPeerConnection()
     video_track = VideoStreamTrack()
@@ -37,9 +34,6 @@ async def main():
     @peer_connection.on("icecandidate")
     def on_icecandidate(candidate):
         print("New ICE candidate : ", candidate)
-
-
-    
 
 if __name__ == "__main__":
     main()

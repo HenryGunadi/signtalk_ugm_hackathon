@@ -1,0 +1,9 @@
+flask
+flask-cors
+flask-sockets
+supabase
+gunicorn
+websockets
+python-dotenv
+aiortc
+opencv-python
