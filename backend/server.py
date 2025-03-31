@@ -14,27 +14,6 @@ async def sendError(websocket: ServerConnection, message: str):
     }
 
     await websocket.send(json.dumps(event))
-
-def broadcastMessage(room: 'Room', message, *args) -> None:
-    print("Message in broadcast : ", message)
-    print("Message type : ", type(message))
-
-    try:
-        # broadcast to other people excluding the user itself
-        if args is not None:
-            excluded_users: List[User] = list(filter(lambda user: user.websocket != args[0], room.connected_participants))
-            excluded_websockets = [user.websocket for user in excluded_users]
-
-            broadcast(excluded_websockets, json.dumps(message))
-        else:
-            # broadcast to all users in the room
-            broadcast([user.websocket for user in room.connected_participants], message)
-    except TypeError as e:
-        print(f"Message is incorrect type")
-        raise
-    except Exception as e:
-        print(f"Broadcast error unexpectedly : {e}") 
-        raise
     
 # === Classes ===
 class Room():
@@ -57,6 +36,28 @@ class Room():
         ]
 
         print("User removed.")
+        
+    def broadcastMessage(self, message, *args) -> None:
+        print("Message in broadcast : ", message)
+        print("Message type : ", type(message))
+
+        try:
+            # broadcast to other people excluding the user itself
+            if args is not None:
+                excluded_users: List[User] = list(filter(lambda user: user.websocket != args[0], self.connected_participants))
+                
+                excluded_websockets = [user.websocket for user in excluded_users]
+
+                broadcast(excluded_websockets, json.dumps(message))
+            else:
+                # broadcast to all users in the room
+                broadcast([user.websocket for user in self.connected_participants], message)
+        except TypeError as e:
+            print(f"Message is incorrect type")
+            raise
+        except Exception as e:
+            print(f"Broadcast error unexpectedly : {e}") 
+            raise
 
 class User():
     def __init__(self, id, websocket: ServerConnection, room: Room):
@@ -70,7 +71,7 @@ class User():
                 raise TypeError("Message is not a string!")
             
             # else broadcast to the room including him/her self
-            await broadcastMessage(self.room, message)
+            await self.room.broadcastMessage(self.room, message)
         except TypeError as e:
             print(str(e))
             await sendError(self.websocket, str(e))
@@ -104,7 +105,7 @@ class User():
                 """
 
                 # # DEMO WITH SIMPLE TEXTS
-                broadcastMessage(self.room, data["message"], self.websocket)
+                self.room.broadcastMessage(self.room, data["message"], self.websocket)
                 # another_user = next((user for user in self.room.connected_participants if user.websocket != self.websocket))
 
                 # TESTING
@@ -116,7 +117,7 @@ class User():
             try:
             # user disconnects
                 self.room.removeUser(self.websocket)
-                await broadcastMessage(self.room, f"User : {self.id} disconnected.", self.websocket)
+                await self.room.broadcastMessage(self.room, f"User : {self.id} disconnected.", self.websocket)
                 del self
             except Exception as e:
                 print(f"Broadcast error : {e}")
