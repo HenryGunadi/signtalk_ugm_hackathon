@@ -6,11 +6,12 @@ from flask import Flask, request, jsonify, render_template
 from flask_sockets import Sockets
 from flask_cors import CORS
 import os
-from supabase import create_client 
+from supabase import create_client
+from flask_jwt_extended import JWTManager, jwt_required
 
 url = os.environ.get("SUPABASE_URL")
 key = os.environ.get("SUPABASE_KEY")
-
+secret_key = os.environ.get("SECRET_KEY")
 supabase = create_client(url, key)
 
 app = Flask(__name__, template_folder="templates")
@@ -24,9 +25,12 @@ CORS(
     methods=["GET", "POST", "PUT", "DELETE"],
 )
 
+app.config["JWT_TOKEN_LOCATION"] = ["headers"]
+app.config["JWT_SECRET_KEY"] = ""
+
 # # @sockets.route("/ws")
 # # def echo_socket(ws):
-# #     while not ws.closed:
+# #     while not ws.closed:cls
 # #         message = ws.receive()
 # #         ws.send(message)
 
@@ -43,10 +47,13 @@ CORS(
 
 @app.route("/")
 def index():
-    response = supabase.table("meeting_rooms").select("name").eq("name", "testing").execute()
-    data = response.data
-    print("Current working directory:", os.getcwd())  # Print working directory
-    print("Templates folder exists:", os.path.exists("templates/index.html"))  # Check if file exists
+    try:
+        response = supabase.table("meeting_rooms").select("name").eq("name", "testing").execute()
+        
+        data = response.data
+    except Exception as e:
+        return jsonify({"type": "error", "message": str(e)}), 500
+    
     return render_template("index.html", meetings=data)
 
 if __name__ == "__main__":

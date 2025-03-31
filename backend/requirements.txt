@@ -7,3 +7,5 @@ websockets
 python-dotenv
 aiortc
 opencv-python
+dotenv
+flask-jwt-extended
