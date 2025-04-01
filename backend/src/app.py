@@ -1,61 +1,68 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask
 # from aiortc import RTCPeerConnection, MediaStreamTrack
-from flask_sockets import Sockets
+from flask_socketio import SocketIO
 from flask_cors import CORS
 import os
 from supabase import create_client
 from flask_jwt_extended import JWTManager, jwt_required
+from controllers import controllers
+from ws_server import App, Server
+import asyncio
+from config import init_config
+import threading
+
 
 url = os.environ.get("SUPABASE_URL")
 key = os.environ.get("SUPABASE_KEY")
 secret_key = os.environ.get("SECRET_KEY")
+jwt_cookie_secure = os.environ.get("JWT_COOKIE_SECURE")
+port = int(os.environ.get("PORT", 5000))
+
 supabase = create_client(url, key)
 
 app = Flask(__name__, template_folder="templates")
-# # sockets = Sockets(app)
+socketio = SocketIO(app)
 
 # cors settings
 CORS(
     app,
-    resources={r"/*": {"origins": "*"}}, 
+    resources={r"/*": {"origins": "*"}}, # <-- fix it later in production
     allow_headers=["Content-Type", "Authorization"],
     methods=["GET", "POST", "PUT", "DELETE"],
 )
 
-app.config["JWT_TOKEN_LOCATION"] = ["headers"]
-app.config["JWT_SECRET_KEY"] = ""
+jwt = JWTManager(app)
 
-# # @sockets.route("/ws")
-# # def echo_socket(ws):
-# #     while not ws.closed:cls
-# #         message = ws.receive()
-# #         ws.send(message)
+# websocket server
+ws_app = App()
+ws_server = Server(ws_app)
 
-# # @app.route("/offer", methods=["POST"])
-# # def handle_offer():
-# #     offer = request.json['sdp']
-# #     pc = RTCPeerConnection()
-# #     pc.setRemoteDescription(offer)
+# initialize config
+init_config(app=app,
+            secret_key=secret_key,
+            jwt_cookie_secure=jwt_cookie_secure)
 
-# #     # create an answer
-# #     answer = pc.createAnswer()
-# #     pc.setLocalDescription(answer)
-# #     return jsonify({'sdp' : pc.localDescription.sdp})
+# controllers
+index_controller = controllers.create_index_bp(supabase)
+auth_controller = controllers.create_auth_bp(supabase)
 
-@app.route("/")
-def index():
-    try:
-        response = supabase.table("meeting_rooms").select("name").eq("name", "testing").execute()
-        
-        data = response.data
-    except Exception as e:
-        return jsonify({"type": "error", "message": str(e)}), 500
+app.register_blueprint(index_controller)
+app.register_blueprint(auth_controller)
+
+def run_flask():
+    app.run(debug=True, port=port, host="0.0.0.0", use_reloader=False)
+
+async def run_ws_server():
+    await ws_server.run()
+
+async def init_app():
+    flask_task = asyncio.to_thread(run_flask)
+    ws_task = asyncio.create_task(run_ws_server())
     
-    return render_template("index.html", meetings=data)
+    await asyncio.gather(flask_task, ws_task)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000)) 
-    app.run(debug=True, port=port, host="0.0.0.0")
+    asyncio.run(init_app())

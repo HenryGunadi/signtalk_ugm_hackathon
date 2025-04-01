@@ -9,3 +9,6 @@ aiortc
 opencv-python
 dotenv
 flask-jwt-extended
+marshmallow
+flask-bcrypt
+flask-socketio

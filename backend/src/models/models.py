@@ -1,21 +1,8 @@
-# web socket for exhanging ice and sdp in signaling between users
-import json
-import asyncio
-import uuid
-from websockets.asyncio.server import serve, broadcast
+from websockets import ServerConnection, broadcast
 from typing import List
-from websockets import ServerConnection
+from utils import ws_utils
+import json
 
-# === UTILS ===
-async def sendError(websocket: ServerConnection, message: str):
-    event = {
-        "type": "error",
-        "message": message
-    }
-
-    await websocket.send(json.dumps(event))
-    
-# === Classes ===
 class Room():
     def __init__(self, id):
         self.connected_participants: List[User] = []
@@ -23,7 +10,7 @@ class Room():
         
     async def addUser(self, new_user: 'User') -> None:
         for user in self.connected_participants:
-            if new_user.id == user.id:
+            if new_user.email == user.email:
                 await new_user.websocket.send("User already exists in the room.")
 
                 return
@@ -60,8 +47,10 @@ class Room():
             raise
 
 class User():
-    def __init__(self, id, websocket: ServerConnection, room: Room):
-        self.id = id
+    def __init__(self, email:str, name:str, password: str, websocket: ServerConnection = None, room: Room = None):
+        self.email = email
+        self.name = name
+        self.password = password
         self.websocket: ServerConnection = websocket
         self.room = room
 
@@ -74,11 +63,11 @@ class User():
             await self.room.broadcastMessage(self.room, message)
         except TypeError as e:
             print(str(e))
-            await sendError(self.websocket, str(e))
+            await ws_utils.sendError(self.websocket, str(e))
             return
         except Exception as e:
             print(f"Unexpected error in sendChatMessage: {e}")
-            await sendError(self.websocket, f"Unexpected error in sendChatMessage: {e}")
+            await ws_utils.sendError(self.websocket, f"Unexpected error in sendChatMessage: {e}")
             return
 
     async def leaveRoom(self) -> None:
@@ -122,76 +111,10 @@ class User():
             except Exception as e:
                 print(f"Broadcast error : {e}")
                 del self
-
-class App():
-    def __init__(self):
-        self.rooms: List[Room] = []
-
-    def addRooms(self, room: Room) -> None:
-        self.rooms.append(room)
-
-    def deleteRoom(self, room_id: str) -> None:
-        self.rooms = [
-            room for room in self.rooms if room.room_id != room_id
-        ]
-
-class Server():
-    def __init__(self, app: App):
-        self.app: App = app
-    
-    # start the websocket server
-    async def run(self) -> None:
-        # websocket is passed here
-        async with serve(self.handler, "localhost", 8000) as server:
-            try:
-                print("Websocket server is running on port 8000")
-                await server.serve_forever()
-            except asyncio.CancelledError:
-                print("Server shutting down...")
-
-    async def handler(self, websocket: ServerConnection) -> None:
-        try:
-            message = await websocket.recv()
-            print("Message from client : ", message)
-            event: dict = json.loads(message)
-
-            await websocket.send(json.dumps({"response": "Hello from server"}))
-            # dummyIdKey = str(uuid.uuid4())
-            dummyKey = "hello"
-
-            # create a call room
-            if event.get("type") == "create":
-                room = Room(dummyKey) # <-- FIX LATER OR MANUALLY INSERT ROOM_ID!!
-                user = User(event.get("id"), websocket, room)
-                await room.addUser(user)
-                self.app.addRooms(room)
-
-                # user is in the call
-                await user.inCall()
-            elif event.get("type") == "join": # <-- join a room
-                room_id = event.get("room_id")
                 
-                for room in self.app.rooms:
-                    if room.room_id == room_id:
-                        user = User(event.get("id"), websocket, room)
-                        await room.addUser(user)
-
-                        # user joined the call
-                        await user.inCall()
-
-                # invalid room_id key
-                await sendError(websocket, "Invalid room key")
-            else:
-                logs = "Event type not found!" 
-                print(logs)
-                await websocket.send(logs)
-        except Exception as e:
-            print(f"Handler error: {e}")
-            await sendError(websocket, str(e))
-
-if __name__ == "__main__":
-    app = App()
-    server = Server(app)
-
-    # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    asyncio.run(server.run())
+    def to_dict(self) -> dict:
+        return {
+            "email": self.email,
+            "name": self.name,
+            "password": self.password
+        }
