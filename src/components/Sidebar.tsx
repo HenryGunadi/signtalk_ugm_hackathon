@@ -20,7 +20,10 @@ const Sidebar = () => {
                         href={link.route}
                         key={link.label}
                         className= {cn('flex gap-4 items-center p-4 rounded-lg justify-start',{ isActive})}
-                    > {link.label} </Link>
+                    ><p className="text-lg font-semibold max-lg:hidden">
+                    {link.label}
+                     </p> 
+                     </Link>
                 )
             })}
         </div>
