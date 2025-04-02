@@ -71,7 +71,7 @@ class User():
                 raise TypeError("Message is not a string!")
             
             # else broadcast to the room including him/her self
-            await self.room.broadcastMessage(self.room, message)
+            await self.room.broadcastMessage(message)
         except TypeError as e:
             print(str(e))
             await sendError(self.websocket, str(e))
@@ -104,14 +104,14 @@ class User():
                 """
 
                 # # DEMO WITH SIMPLE TEXTS
-                self.room.broadcastMessage(self.room, data["message"], self.websocket)
+                self.room.broadcastMessage(data["message"], self.websocket)
         except Exception as e:
             print(f"Unexpected error in inCall: {e}")
         finally:
             try:
             # user disconnects
                 self.room.removeUser(self.websocket)
-                await self.room.broadcastMessage(self.room, f"User : {self.id} disconnected.", self.websocket)
+                await self.room.broadcastMessage(f"User : {self.id} disconnected.", self.websocket)
                 del self
             except Exception as e:
                 print(f"Broadcast error : {e}")

@@ -1,3 +1,4 @@
+import sys
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -13,6 +14,7 @@ from ws_server import App, Server
 import asyncio
 from config import init_config
 import threading
+from asyncio import Future
 
 
 url = os.environ.get("SUPABASE_URL")
@@ -52,6 +54,19 @@ auth_controller = controllers.create_auth_bp(supabase)
 app.register_blueprint(index_controller)
 app.register_blueprint(auth_controller)
 
+async def shutdown(tasks, flask_thread):
+    await asyncio.sleep(3)
+
+    for task in tasks:
+        if isinstance(task, asyncio.Task):
+            task.cancel()
+
+    if flask_thread.is_alive():
+        print("Stopping Flask server...")
+        os._exit(0)
+
+    await asyncio.sleep(1)
+
 def run_flask():
     app.run(debug=True, port=port, host="0.0.0.0", use_reloader=False)
 
@@ -59,10 +74,18 @@ async def run_ws_server():
     await ws_server.run()
 
 async def init_app():
-    flask_task = asyncio.to_thread(run_flask)
-    ws_task = asyncio.create_task(run_ws_server())
-    
-    await asyncio.gather(flask_task, ws_task)
+    try:
+        flask_thread = threading.Thread(target=run_flask, daemon=True)
+        flask_thread.start() 
+
+        ws_task = asyncio.create_task(run_ws_server())
+        tasks = [ws_task]
+
+        await asyncio.gather(*tasks)
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        print("Received exit signal, shutting down...")
+        await shutdown(tasks, flask_thread)
+        sys.exit()
 
 if __name__ == "__main__":
     asyncio.run(init_app())
