@@ -1,0 +1,14 @@
+flask
+flask-cors
+flask-sockets
+supabase
+gunicorn
+websockets
+python-dotenv
+aiortc
+opencv-python
+dotenv
+flask-jwt-extended
+marshmallow
+flask-bcrypt
+flask-socketio
