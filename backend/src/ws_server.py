@@ -5,6 +5,8 @@ import uuid
 from websockets.asyncio.server import serve, broadcast
 from typing import List
 from websockets import ServerConnection
+from aiortc import MediaStreamTrack, MediaStreamError, RTCPeerConnection, RTCSessionDescription
+
 
 # === UTILS ===
 async def sendError(websocket: ServerConnection, message: str):
@@ -14,7 +16,10 @@ async def sendError(websocket: ServerConnection, message: str):
     }
 
     await websocket.send(json.dumps(event))
-    
+
+def log_info(msg, *args, **kwargs):
+        print({kwargs.get("user_id")} + "" + msg, *args)
+
 # === Classes ===
 class Room():
     def __init__(self, id):
@@ -29,7 +34,16 @@ class Room():
                 return
 
         self.connected_participants.append(new_user)
-
+        
+        # send broadcast that another user has join to notify users to make sdp exchange
+        excluded_users: List[User] = list(filter(lambda user: user.websocket != new_user.websocket, self.connected_participants))
+        exlcuded_websockets = [user.websocket for user in excluded_users]
+        message = {
+            "user_id": new_user.id,
+            "type": "join"
+        }        
+        
+        broadcast(exlcuded_websockets, json.dumps(message))       
     def removeUser(self, websocket: ServerConnection) -> None:
         self.connected_participants = [
             user for user in self.connected_participants if user.websocket != websocket 
@@ -60,10 +74,11 @@ class Room():
             raise
 
 class User():
-    def __init__(self, id, websocket: ServerConnection, room: Room):
+    def __init__(self, id, websocket: ServerConnection, room: Room, pc: RTCPeerConnection = None):
         self.id = id
         self.websocket: ServerConnection = websocket
-        self.room = room
+        self.pc: RTCPeerConnection = pc
+        self.room: Room = room
 
     async def sendChatMessage(self, message) -> None:
         try:
@@ -88,22 +103,33 @@ class User():
     async def inCall(self) -> None:
         try:
             print(f"User id : {self.id} connected to the call")
+
             async for message in self.websocket:
                 data = json.loads(message)
                 print(f"SERVER LOGS : {data}")
 
+                """
+                    WAITING FOR BT TO CONTINUEEE
+                """
+
                 # first handle if its a sdp or ice offer
                 if data['type'] in ["offer", "answer"]:
-                    for user in self.room.connected_participants:
+                    payload = {
+                        "type": data["type"],
+                        "sdp": data["sdp"],
+                        "user_id": self.id
+                    }
+
+                    for user in self.room.connected_participants: # <-- FIX IT LATER
                         if user.websocket != self.websocket:
-                            await user.websocket.send(json.dumps(data["sdp"]))
-                
+                            await user.websocket.send(json.dumps(payload))
+
                 """
                     Handle audio and video stream. Process it as input to the ai model
                     and give back the output to clients
                 """
 
-                # # DEMO WITH SIMPLE TEXTS
+                ## DEMO WITH SIMPLE TEXTS
                 self.room.broadcastMessage(data["message"], self.websocket)
         except Exception as e:
             print(f"Unexpected error in inCall: {e}")
@@ -155,17 +181,17 @@ class Server():
 
             # create a call room
             if event.get("type") == "create":
-                room = Room(dummyKey) # <-- FIX LATER OR MANUALLY INSERT ROOM_ID!!
+                room = Room(dummyKey) # <-- FIX it LATER OR MANUALLY INSERT ROOM_ID!!
                 user = User(event.get("id"), websocket, room)
                 await room.addUser(user)
-                self.app.addRooms(room)
+                self.app.addRooms(room) # <-- FIX it later, integrate with real time db
 
                 # user is in the call
                 await user.inCall()
             elif event.get("type") == "join": # <-- join a room
                 room_id = event.get("room_id")
                 
-                for room in self.app.rooms:
+                for room in self.app.rooms: # <-- FIX IT LATER
                     if room.room_id == room_id:
                         user = User(event.get("id"), websocket, room)
                         await room.addUser(user)

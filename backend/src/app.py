@@ -16,7 +16,6 @@ from config import init_config
 import threading
 from asyncio import Future
 
-
 url = os.environ.get("SUPABASE_URL")
 key = os.environ.get("SUPABASE_KEY")
 secret_key = os.environ.get("SECRET_KEY")
