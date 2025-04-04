@@ -34,8 +34,12 @@ def create_index_bp(supabase: Client):
                 return jsonify({"error": "Room name is required"}), 400
             
             response = supabase.table("meeting_rooms").insert({"name": data.get("name")}).execute()
-            
-            return jsonify({"success": True, "response" : response}), 200
+
+            if response.data:
+                room_id = response.data[0]["id"]
+                return jsonify({"success": True, "room_id" : room_id}), 200
+            else:
+                return jsonify({"error": "Failed to insert room"}), 500
         except Exception as e:
             return jsonify({"error": str(e)}), 500
         

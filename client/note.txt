@@ -1,0 +1,24 @@
+## Buat BT
+request payload buat request bikin room atau join = 
+{
+    "type": str = (create/join):
+    "id": str = user idnya luh bikin terserah pake uuid ato apa
+    "room_id" = kalo lu mau join room sediain ini
+}
+
+=== TODO ===
+Note -> Demo for peer to peer connection only ( 2 users ) 
+1. Stop duplicate users from joining. -> DONE
+
+=== easier testing with the client javascript === 
+2. Implement "offer", "answer", and "candidate" handling.
+    - How do we handle if and only if there more than 1 users in a room and also the websocket
+      loop problem
+
+3. keep connnection alive ping and pong ->
+
+4. broadcast to other users
+
+3. Handle if no one in the room then delete room from App 
+
+4. In call method

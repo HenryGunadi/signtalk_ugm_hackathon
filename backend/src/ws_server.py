@@ -171,40 +171,44 @@ class Server():
 
     async def handler(self, websocket: ServerConnection) -> None:
         try:
-            message = await websocket.recv()
-            print("Message from client : ", message)
-            event: dict = json.loads(message)
-
-            await websocket.send(json.dumps({"response": "Hello from server"}))
-            # dummyIdKey = str(uuid.uuid4())
-            dummyKey = "hello"
-
-            # create a call room
-            if event.get("type") == "create":
-                room = Room(dummyKey) # <-- FIX it LATER OR MANUALLY INSERT ROOM_ID!!
-                user = User(event.get("id"), websocket, room)
-                await room.addUser(user)
-                self.app.addRooms(room) # <-- FIX it later, integrate with real time db
-
-                # user is in the call
-                await user.inCall()
-            elif event.get("type") == "join": # <-- join a room
-                room_id = event.get("room_id")
+            while True:
+                message = await websocket.recv()
+                event: dict = json.loads(message)
+                dummyKey = "hello"
+                # dummyIdKey = str(uuid.uuid4())
                 
-                for room in self.app.rooms: # <-- FIX IT LATER
-                    if room.room_id == room_id:
-                        user = User(event.get("id"), websocket, room)
-                        await room.addUser(user)
+                if event.get("type") == "connect":
+                    print("Message from client : ", message)
+                    await websocket.send(json.dumps({"response": "Hello from server, you are connected"}))
+                # create a call room
+                elif event.get("type") == "create":
+                    room = Room(dummyKey) # <-- FIX it LATER OR MANUALLY INSERT ROOM_ID!!
+                    user = User(event.get("id"), websocket, room)
+                    await room.addUser(user)
+                    self.app.addRooms(room) # <-- FIX it later, integrate with real time db
 
-                        # user joined the call
-                        await user.inCall()
+                    # user is in the call
+                    await user.inCall()
+                elif event.get("type") == "join": # <-- join a room
+                    room_id = event.get("room_id")
+                    
+                    for room in self.app.rooms: # <-- FIX IT LATER
+                        if room.room_id == room_id:
+                            user = User(event.get("id"), websocket, room)
+                            await room.addUser(user)
 
-                # invalid room_id key
-                await sendError(websocket, "Invalid room key")
-            else:
-                logs = "Event type not found!" 
-                print(logs)
-                await websocket.send(logs)
+                            # user joined the call
+                            await user.inCall()
+
+                    # invalid room_id key
+                    await sendError(websocket, "Invalid room key")
+                elif event.get("type") == "ping":
+                    print("Ping from client")
+                    await websocket.send(json.dumps({"type": "pong"}))
+                else:
+                    logs = "Event type not found!" 
+                    print(logs)
+                    await websocket.send(logs)
         except Exception as e:
             print(f"Handler error: {e}")
             await sendError(websocket, str(e))
