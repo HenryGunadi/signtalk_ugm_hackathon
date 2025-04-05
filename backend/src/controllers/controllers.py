@@ -24,7 +24,7 @@ def create_index_bp(supabase: Client):
         
     
     @index_bp.route("/create_room", methods=["POST"])
-    @jwt_required()
+    # @jwt_required() < TURN IT ON LATER
     def create_room():
         try:
             data: dict = request.get_json()

@@ -27,19 +27,20 @@ supabase = create_client(url, key)
 app = Flask(__name__, template_folder="templates")
 socketio = SocketIO(app)
 
-# cors settings
-CORS(
-    app,
-    resources={r"/*": {"origins": "*"}}, # <-- fix it later in production
-    allow_headers=["Content-Type", "Authorization"],
-    methods=["GET", "POST", "PUT", "DELETE"],
-)
-
 jwt = JWTManager(app)
 
 # websocket server
 ws_app = App()
 ws_server = Server(ws_app)
+
+# cors settings
+CORS(
+    app,
+    resources={r"/*": {"origins": "http://localhost:3000"}}, # <-- fix it later in production
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "PUT", "DELETE"],
+    supports_credentials=True
+)
 
 # initialize config
 init_config(app=app,

@@ -8,12 +8,14 @@ import { json } from "stream/consumers";
 import { send } from "process";
 import axios from "axios";
 import { name } from "@stream-io/video-react-sdk";
+import { create } from "domain";
 
 const secretKey = process.env.NEXT_PUBLIC_SECRET_KEY;
 
 const MeetingTypeList = () => {
     const router = useRouter(); // Make sure to call useRouter() with parentheses
     const [meetingState, setMeetingState] = useState<"isScheduleMeeting" | "isJoiningMeeting" | "isInstantMeeting" | undefined>(undefined);
+
     const createMeeting = async (): Promise<void> => {
         // send http req post to server to make a meeting
         try {
@@ -25,7 +27,6 @@ const MeetingTypeList = () => {
                 headers: {
                     "Content-Type": "application/json",
                     Authorization: "Bearer YOUR_TOKEN_HERE", // FIX IT LATER!
-                    "Custom-Header": "HelloFromClient",
                 },
                 withCredentials: true,
             });
@@ -77,7 +78,7 @@ const MeetingTypeList = () => {
                 onClose={() => setMeetingState(undefined)}
                 title="Create Meeting"
                 handleClick={() => {
-                    router.push("/");
+                    // createMeeting();
                 }}
             />
             <MeetingModal
@@ -90,7 +91,7 @@ const MeetingTypeList = () => {
                 isOpen={meetingState === "isInstantMeeting"} // This condition should trigger the modal
                 onClose={() => setMeetingState(undefined)}
                 title="Create Meeting"
-                // handleClick={createMeeting}
+                handleClick={createMeeting}
             />
         </section>
     );
