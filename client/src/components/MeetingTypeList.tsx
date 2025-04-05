@@ -9,6 +9,7 @@ import { send } from "process";
 import axios from "axios";
 import { name } from "@stream-io/video-react-sdk";
 import { create } from "domain";
+import { UUID } from "crypto";
 
 const secretKey = process.env.NEXT_PUBLIC_SECRET_KEY;
 
@@ -30,6 +31,9 @@ const MeetingTypeList = () => {
                 },
                 withCredentials: true,
             });
+
+            sessionStorage.setItem("role", "create");
+            sessionStorage.setItem("user_id", crypto.randomUUID());
 
             router.push(`/meeting/${response.data.room_id}`);
         } catch (e) {
