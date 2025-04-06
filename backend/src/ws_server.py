@@ -7,7 +7,11 @@ from typing import List, TypedDict, Set
 from websockets import ServerConnection
 from aiortc import MediaStreamTrack, MediaStreamError, RTCPeerConnection, RTCSessionDescription
 from datetime import datetime
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+ws_port = os.getenv("WS_PORT", "")
 
 # # === TYPES ===
 # class Participant(TypedDict):

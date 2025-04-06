@@ -36,7 +36,7 @@ ws_server = Server(ws_app)
 # cors settings
 CORS(
     app,
-    resources={r"/*": {"origins": ["http://localhost:3000", "http://192.168.100.8:3000"]}},
+    resources={r"/*": {"origins": ["http://localhost:3000", "http://192.168.100.9:3000",]}},
     allow_headers=["Content-Type", "Authorization"],
     methods=["GET", "POST", "PUT", "DELETE"],
     supports_credentials=True
