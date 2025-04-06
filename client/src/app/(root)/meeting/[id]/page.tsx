@@ -15,14 +15,27 @@ type ICECandidate = {
     candidate: string | null;
     sdpMid: string | null;
     sdpMlineIndex: number | null;
+    user_id: string;
+};
+
+type OfferAnswerMessage = {
+    type: string;
+    sdp: RTCSessionDescriptionInit;
+    user_id: string;
+};
+
+type Connection = {
+    user_id: string;
+    pc: RTCPeerConnection;
 };
 
 // === TESTING ONLY ===
 const role: string | null = sessionStorage.getItem("role");
-const user_id: string | null = sessionStorage.getItem("user_id");
+const storedId = sessionStorage.getItem("user_id");
+const user_id: number | null = storedId ? parseInt(storedId) : null;
 
 const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
-    const pc = useRef<RTCPeerConnection | null>(null);
+    const pcs = useRef<Set<Connection>>(new Set());
     const localStream = useRef<MediaStream | null>(null);
     const startButton = useRef<HTMLButtonElement | null>(null);
     const hangupButton = useRef<HTMLButtonElement | null>(null);
@@ -44,7 +57,11 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
 
     useEffect(() => {
         try {
-            console.log("Creating a meeting ...");
+            if (role == "create") {
+                console.log("Creating a meeting ...");
+            } else {
+                console.log("Joining the meeting ...");
+            }
 
             if (wsRef.current && wsRef.current.readyState <= 1) {
                 console.log("WebSocket is already open or connecting...");
@@ -54,25 +71,36 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
             const ws: WebSocket = new WebSocket("ws://192.168.100.8:8000");
             wsRef.current = ws;
             ws.binaryType = "arraybuffer";
+            const room_id: number = parseInt(id);
 
-            // create or join room
-            if (role == "create") {
-                const createRoom = {
-                    type: "create",
-                    id: user_id!, // TESTING ONLY, later fetch from db
-                };
+            ws.addEventListener("open", async () => {
+                console.log(`User ID : ${user_id} connected!`);
 
-                wsRef.current.send(JSON.stringify(createRoom));
-            } else if (role == "join") {
-                const joinRoom = {
-                    type: "join",
-                    id: crypto.randomUUID(),
-                };
+                // create or join room
+                if (role == "create") {
+                    const createRoom = {
+                        type: "create",
+                        id: user_id, // TESTING ONLY, later fetch from db
+                        room_id: room_id,
+                    };
 
-                wsRef.current.send(JSON.stringify(joinRoom));
-            }
+                    if (wsRef.current) {
+                        wsRef.current.send(JSON.stringify(createRoom));
+                    }
+                } else if (role == "join") {
+                    console.log("ROOM ID IN JOIN CIENT : ", room_id);
 
-            ws.addEventListener("open", () => {
+                    const joinRoom = {
+                        type: "join",
+                        id: user_id,
+                        room_id: room_id,
+                    };
+
+                    if (wsRef.current) {
+                        wsRef.current.send(JSON.stringify(joinRoom));
+                    }
+                }
+
                 const sendMsg: SendMessage = {
                     type: "connect",
                     message: "Hello server",
@@ -80,6 +108,7 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
 
                 ws.send(JSON.stringify(sendMsg));
 
+                // ping pong intervals
                 const pingInterval = setInterval(() => {
                     if (ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({ type: "ping", message: null }));
@@ -88,6 +117,28 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
                         console.log("Ping stopped: socket closed");
                     }
                 }, 5000);
+
+                // immediately get local stream
+                try {
+                    console.log("localVideo ref:", localVideo.current);
+
+                    localStream.current = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: { echoCancellation: true },
+                    });
+
+                    if (localVideo.current) {
+                        localVideo.current.srcObject = localStream.current;
+                    }
+                } catch (err) {
+                    console.error("User's devices crashed or blocked : ", err);
+                }
+
+                startButton.current!.disabled = true;
+                hangupButton.current!.disabled = false;
+                muteAudButton.current!.disabled = false;
+
+                wsRef.current!.send(JSON.stringify({ type: "ready" }));
             });
 
             ws.addEventListener("message", (event: MessageEvent) => {
@@ -105,7 +156,7 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
 
                 switch (message.type) {
                     case "offer":
-                        handleOffer(message, ws);
+                        handleOffer(message, ws); // <-- receive offer
                         break;
                     case "answer":
                         handleAnswer(message);
@@ -113,17 +164,11 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
                     case "candidate":
                         handleCandidate(message);
                         break;
-                    case "ready":
-                        if (pc.current) {
-                            console.log("already in call, ignoring");
-                            return;
-                        }
-                        makeCall(ws);
+                    case "ready": // <-- someone has joined and ready to be offered
+                        offerCallConnection(ws, message.user_id);
                         break;
                     case "bye":
-                        if (pc.current) {
-                            hangup();
-                        }
+                        hangup();
                 }
             });
 
@@ -147,22 +192,31 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
         }
     }, []);
 
-    const handleOffer = async (offer: any, ws: WebSocket) => {
-        if (pc.current) {
-            // peer connection has already been established
-            console.error("existing peerconnection");
-            return;
+    function searchConnection(message: OfferAnswerMessage | ICECandidate | { user_id: string }): Connection | null {
+        for (const connection of pcs.current) {
+            if (connection.user_id == message.user_id) {
+                return connection;
+            }
         }
 
-        try {
-            pc.current = new RTCPeerConnection(configuration);
+        return null;
+    }
 
-            pc.current.onicecandidate = (e: RTCPeerConnectionIceEvent) => {
+    const handleOffer = async (offer: OfferAnswerMessage, ws: WebSocket) => {
+        try {
+            const connection = searchConnection(offer);
+            if (!connection) return;
+
+            const pc: RTCPeerConnection = new RTCPeerConnection(configuration);
+            pcs.current.add({ user_id: offer.user_id, pc: pc });
+
+            pc.onicecandidate = (e: RTCPeerConnectionIceEvent) => {
                 const message: ICECandidate = {
                     type: "candidate",
                     candidate: null,
                     sdpMid: null,
                     sdpMlineIndex: null,
+                    user_id: offer.user_id,
                 };
 
                 // if candidate exists
@@ -176,65 +230,83 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
                 ws.send(JSON.stringify(message));
             };
 
-            pc.current.ontrack = (e) => (remoteVideo.current ? (remoteVideo.current.srcObject = e.streams[0]) : console.log("remoteVideo.current is null"));
+            pc.ontrack = (e) => (remoteVideo.current ? (remoteVideo.current.srcObject = e.streams[0]) : console.log("remoteVideo.current is null"));
 
             if (localStream.current) {
-                localStream.current.getTracks().forEach((track: MediaStreamTrack) => pc.current!.addTrack(track, localStream.current!));
+                localStream.current.getTracks().forEach((track: MediaStreamTrack) => pc.addTrack(track, localStream.current!));
             } else {
                 console.log("localstream is null");
             }
 
-            await pc.current.setRemoteDescription(offer);
+            await pc.setRemoteDescription(offer.sdp);
 
-            const answer = await pc.current.createAnswer();
+            const answer = await pc.createAnswer();
             ws.send(JSON.stringify({ type: "answer", sdp: answer.sdp }));
 
-            await pc.current.setLocalDescription(answer);
+            await pc.setLocalDescription(answer);
         } catch (e) {
             console.error("Error handling offer : ", e);
         }
     };
 
-    const handleAnswer = async (answer: RTCSessionDescriptionInit) => {
-        if (!pc.current) {
-            console.error("no peerconnection");
-            return;
-        }
-
+    const handleAnswer = async (answer: OfferAnswerMessage) => {
         try {
-            // set remote descx from the remote's answer
-            await pc.current.setRemoteDescription(answer);
+            const connection = searchConnection(answer);
+
+            if (connection) {
+                await connection.pc.setRemoteDescription(answer.sdp);
+            }
         } catch (e) {
             console.error("Error handling answer : ", e);
         }
     };
 
-    const handleCandidate = async (candidate: RTCIceCandidate) => {
+    const handleCandidate = async (candidate: ICECandidate) => {
         try {
-            if (!pc.current) {
-                console.log("no peerconnection");
-                return;
-            }
+            const connection = searchConnection(candidate);
 
-            if (!candidate) {
-                await pc.current.addIceCandidate(null);
-            } else {
-                await pc.current.addIceCandidate(candidate);
+            if (connection) {
+                if (!candidate.candidate) {
+                    await connection.pc.addIceCandidate(null);
+                } else {
+                    const iceCandidateInit: RTCIceCandidateInit = {
+                        candidate: candidate.candidate,
+                        sdpMid: candidate.sdpMid,
+                        sdpMLineIndex: candidate.sdpMlineIndex,
+                    };
+
+                    await connection.pc.addIceCandidate(iceCandidateInit);
+                }
             }
         } catch (e) {
             console.error("Error handling candidate : ", e);
         }
     };
 
-    async function makeCall(ws: WebSocket) {
+    async function offerCallConnection(ws: WebSocket, user_id: string) {
         try {
-            pc.current = new RTCPeerConnection(configuration);
-            pc.current.onicecandidate = (e: RTCPeerConnectionIceEvent) => {
+            const connection = searchConnection({ user_id: user_id });
+
+            // connection already exists
+            if (connection) {
+                return;
+            }
+
+            const pc = new RTCPeerConnection(configuration);
+            const newConnection: Connection = {
+                user_id: user_id,
+                pc: pc,
+            };
+
+            pcs.current.add(newConnection);
+
+            pc.onicecandidate = (e: RTCPeerConnectionIceEvent) => {
                 const message: ICECandidate = {
                     type: "candidate",
                     candidate: null,
                     sdpMid: null,
                     sdpMlineIndex: null,
+                    user_id: user_id,
                 };
 
                 if (e.candidate) {
@@ -247,33 +319,27 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
             };
 
             // media stream track
-            pc.current.ontrack = (e) => (remoteVideo.current ? (remoteVideo.current.srcObject = e.streams[0]) : console.log("remoteVideo.current is null"));
+            pc.ontrack = (e) => (remoteVideo.current ? (remoteVideo.current.srcObject = e.streams[0]) : console.log("remoteVideo.current is null"));
 
             if (localStream.current) {
-                localStream.current.getTracks().forEach((track: MediaStreamTrack) => pc.current!.addTrack(track, localStream.current!));
+                localStream.current.getTracks().forEach((track: MediaStreamTrack) => pc.addTrack(track, localStream.current!));
             } else {
                 console.log("localstream is null");
             }
 
-            // if user is the creator of the room
-            if (role == "create") {
-                return;
-            }
-
-            // Offerer would make the offer
-            const offer = await pc.current.createOffer();
+            const offer = await pc.createOffer();
             ws.send(JSON.stringify({ type: "offer", sdp: offer.sdp, user_id: user_id! }));
-            await pc.current.setLocalDescription(offer);
+            await pc.setLocalDescription(offer);
         } catch (e) {
             console.error("Error making call: ", e);
         }
     }
 
     async function hangup() {
-        if (pc.current) {
-            pc.current.close();
-            pc.current = null;
+        for (const connection of pcs.current) {
+            connection.pc.close();
         }
+        pcs.current.clear();
 
         localStream.current && localStream.current.getTracks().forEach((track) => track.stop());
         localStream.current = null;
@@ -282,23 +348,7 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
         muteAudButton.current!.disabled = true;
     }
 
-    const startB = async () => {
-        try {
-            localStream.current = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: { echoCancellation: true },
-            });
-
-            localVideo.current!.srcObject = localStream.current;
-        } catch (err) {
-            console.error("Error starting a call : ", err);
-        }
-
-        startButton.current!.disabled = true;
-        hangupButton.current!.disabled = false;
-        muteAudButton.current!.disabled = false;
-        wsRef.current!.send(JSON.stringify({ type: "ready" }));
-    };
+    // const startB = async () => {};
 
     const hangB = async () => {
         hangup();
@@ -331,7 +381,7 @@ const Meeting = ({ params }: { params: Promise<{ id: string }> }) => {
                 </div>
 
                 <div className="border-1 flex justify-center gap-12">
-                    <button className="" ref={startButton} onClick={startB}>
+                    <button className="" ref={startButton}>
                         <FiVideo className="w-6 h-6 cursor-pointer" />
                     </button>
                     <button className="" ref={hangupButton} onClick={hangB}>

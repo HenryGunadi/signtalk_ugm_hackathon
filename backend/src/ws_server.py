@@ -66,9 +66,6 @@ class Room():
         print("User removed.")
         
     def broadcastMessage(self, message, *args) -> None:
-        print("Message in broadcast : ", message)
-        print("Message type : ", type(message))
-
         try:
             # broadcast to other people excluding the user itself
             if args is not None:
@@ -91,12 +88,10 @@ class Room():
         pass
 
 class User():
-    def __init__(self, id, websocket: ServerConnection, room: Room, role: str, joined: datetime):
+    def __init__(self, id, websocket: ServerConnection, room: Room):
         self.id = id
         self.websocket: ServerConnection = websocket
         self.room: Room = room
-        self.role: str
-        self.joined: datetime # track the joined time <-- IDK about this
 
     # NOT SURE ABOUT THIS METHOD
     async def sendChatMessage(self, message) -> None:
@@ -133,37 +128,38 @@ class User():
                     await self.websocket.send(json.dumps({"type": "pong"}))
 
                 # first handle if its a sdp or ice offer
-                if data['type'] in ["offer", "answer"]:
-                    payload = {
-                        "type": data["type"],
-                        "sdp": data["sdp"],
-                        "user_id": self.id
-                    }
+                # if data['type'] in ["offer", "answer"]:
+                #     payload = {
+                #         "type": data["type"],
+                #         "sdp": data["sdp"],
+                #         "user_id": self.id
+                #     }
 
-                    if data.get("type") == "offer":
-                        for user in self.room.connected_participants: # <-- FIX IT LATER
-                            if user.websocket != self.websocket:
-                                await user.websocket.send(json.dumps(payload))
-                    elif data.get("type") == "answer":
-                        answerTo: User = next((user for user in self.room.connected_participants if user.id == data.get("user_id")), None)
+                #     if data.get("type") == "offer":
+                #         for user in self.room.connected_participants: # <-- FIX IT LATER
+                #             if user.websocket != self.websocket:
+                #                 await user.websocket.send(json.dumps(payload))
+                #     elif data.get("type") == "answer":
+                #         answerTo: User = next((user for user in self.room.connected_participants if user.id == data.get("user_id")), None)
 
-                        if answerTo is None:
-                            await self.websocket.send("Offerer is not found")
-                            continue
+                #         if answerTo is None:
+                #             await self.websocket.send("Offerer is not found")
+                #             continue
 
-                        payload = {
-                            "type": "answer",
-                            "sdp": data.get("sdp"),       
-                        }
+                #         payload = {
+                #             "type": "answer",
+                #             "sdp": data.get("sdp"),
+                #             "user_id": self.id
+                #         }
 
-                        await answerTo.websocket.send(json.dumps(payload))
+                #         await answerTo.websocket.send(json.dumps(payload))
                 """
                     Handle audio and video stream. Process it as input to the ai model
                     and give back the output to clients
                 """
 
                 ## DEMO WITH SIMPLE TEXTS
-                self.room.broadcastMessage(data["message"], self.websocket)
+                self.room.broadcastMessage(data, self.websocket)
         except Exception as e:
             print(f"Unexpected error in inCall: {e}")
         finally:
@@ -207,27 +203,38 @@ class Server():
             while True:
                 message = await websocket.recv()
                 event: dict = json.loads(message)
-                dummyKey = "hello"
-                # dummyIdKey = str(uuid.uuid4())
-                
-                if event.get("type") == "connect":
+                room_id = event.get("room_id")
+                event_type = event.get("type")
+                user_id = event.get("id")
+
+                print("FIRST EVENT IN WS : ", event)
+
+                if event_type == "connect":
                     print("Message from client : ", message)
                     await websocket.send(json.dumps({"response": "Hello from server, you are connected"}))
                 # create a call room
-                elif event.get("type") == "create":
-                    room = Room(dummyKey) # <-- FIX it LATER OR MANUALLY INSERT ROOM_ID!!
-                    user = User(event.get("id"), websocket, room, "create", datetime.now())
+                elif event_type == "create":
+                    room = Room(room_id) # <-- FIX it LATER OR MANUALLY INSERT ROOM_ID!!
+                    user = User(user_id, websocket, room)
                     await room.addUser(user)
                     self.app.addRooms(room) # <-- FIX it later, integrate with real time db
 
+                    print("ROOM ID passed in:", room_id, type(room_id))
+                    
+                    for room in self.app.rooms:
+                        print("ROOMS : ", room.room_id)
+
                     # user is in the call
                     await user.inCall()
-                elif event.get("type") == "join": # <-- join a room
-                    room_id = event.get("room_id")
+                elif event_type == "join": # <-- join a room
+                    print("ROOM ID passed in:", room_id, type(room_id))
                     
+                    for room in self.app.rooms:
+                        print("ROOMS : ", room.room_id)
+
                     for room in self.app.rooms: # <-- FIX IT LATER
                         if room.room_id == room_id:
-                            user = User(event.get("id"), websocket, room)
+                            user = User(user_id, websocket, room)
                             await room.addUser(user)
 
                             # user joined the call
@@ -235,8 +242,8 @@ class Server():
 
                     # invalid room_id key
                     await sendError(websocket, "Invalid room key")
-                
                 else:
+                    print(event)
                     logs = "Event type not found!" 
                     print(logs)
                     await websocket.send(json.dumps({"type": "unknown", "message": "unknown"}))
@@ -244,8 +251,9 @@ class Server():
             print(f"Handler error: {e}")
             await sendError(websocket, str(e))
 
+app = App()
+
 if __name__ == "__main__":
-    app = App()
     server = Server(app)
 
     # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())

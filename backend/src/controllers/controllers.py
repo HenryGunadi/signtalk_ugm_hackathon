@@ -24,36 +24,62 @@ def create_index_bp(supabase: Client):
         
     
     @index_bp.route("/create_room", methods=["POST"])
-    # @jwt_required() < TURN IT ON LATER
+    # @jwt_required() <-- TURN IT ON LATER
     def create_room():
+        print("create reached")
+
         try:
             data: dict = request.get_json()
             room_name = data.get("name")
+            user_id = data.get("user_id")
+            print("User ID passed in:", user_id, type(user_id))
+
+            user_check = supabase.table("users").select("*").eq("id", user_id).single().execute()
+            print("User exists check:", user_check)
             
             if not room_name:
                 return jsonify({"error": "Room name is required"}), 400
             
             response = supabase.table("meeting_rooms").insert({"name": data.get("name")}).execute()
+            room_id = response.data[0]["id"]
+
+            print("Create supabase room : ", response)
+
+            updateResponse = (
+                supabase.table("users")
+                .update({"room_id": room_id})
+                .eq("id", user_id)
+                .execute()
+            )
+
+            print("Update user response : ", updateResponse)
 
             if response.data:
-                room_id = response.data[0]["id"]
                 return jsonify({"success": True, "room_id" : room_id}), 200
             else:
                 return jsonify({"error": "Failed to insert room"}), 500
         except Exception as e:
+            print(str(e))
             return jsonify({"error": str(e)}), 500
         
     @index_bp.route("/join_room", methods=["POST"])
-    @jwt_required()
+    # @jwt_required() <-- TURN IT ON LATER
     def join_room():
+        print("join reached")
+
         try:
             data: dict = request.get_json()
             room_id: int = data.get("room_id")
-            
+            user_id: int = data.get("user_id")
+            print("User ID passed in:", user_id, type(user_id))
+
+            user_check = supabase.table("users").select("*").eq("id", user_id).single().execute()
+            print("User exists check:", user_check)
+
             if not room_id:
                 return jsonify({"error": "Missing room id"}), 400
             
-            response: dict = (
+            response = (
                 supabase.table("meeting_rooms")
                 .select("*")
                 .eq("id", room_id)
@@ -61,19 +87,24 @@ def create_index_bp(supabase: Client):
                 .execute()
             ).data
             
+            print("Supabase response:", response)
+
             if not response:
                 return jsonify({"error": "Room id not found"}), 400
             
-            response: dict = (
+            updateResponse = (
                 supabase.table("users")
                 .update({"room_id": room_id})
-                .eq("id", data.get("user_id"))
+                .eq("id", user_id)
                 .execute()
             )
+
+            print("Update user response : ", updateResponse)
             
             # User will be redirected from client side
             return jsonify({"success": True}), 200
         except Exception as e:
+            print(str(e))
             return jsonify({"error": str(e)}), 500
         
     # @index_bp.route("/get_user", methods=["POST"])
