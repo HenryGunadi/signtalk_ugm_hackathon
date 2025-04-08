@@ -63,6 +63,9 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 				console.log('Joining the meeting ...');
 			}
 
+			console.log('USER ID LOCAL STORAGE : ', user_id);
+			console.log('ROLE LOCAL STORAGE : ', role);
+
 			if (wsRef.current && wsRef.current.readyState <= 1) {
 				console.log('WebSocket is already open or connecting...');
 				return;
@@ -75,6 +78,8 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 			wsRef.current = ws;
 			ws.binaryType = 'arraybuffer';
 			const room_id: number = parseInt(id);
+
+			console.log('ROOM IDDDD : ', room_id);
 
 			ws.addEventListener('open', async () => {
 				console.log(`User ID : ${user_id} connected!`);
@@ -144,6 +149,7 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 				muteAudButton.current!.disabled = false;
 
 				wsRef.current!.send(JSON.stringify({type: 'ready'}));
+				alert('IM READY!');
 			});
 
 			ws.addEventListener('message', (event: MessageEvent) => {
@@ -209,8 +215,9 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 
 	const handleOffer = async (offer: OfferAnswerMessage, ws: WebSocket) => {
 		try {
-			const connection = searchConnection(offer);
-			if (!connection) return;
+			alert(`OFFER SENT : ${offer}`);
+			// const connection = searchConnection(offer);
+			// if (!connection) return;
 
 			const pc: RTCPeerConnection = new RTCPeerConnection(configuration);
 			pcs.current.add({user_id: offer.user_id, pc: pc});
@@ -233,13 +240,22 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 
 				// send ICE to other peers via ws server
 				ws.send(JSON.stringify(message));
+				alert('REMOTE PEAR SENT ICE CANDIDATE');
 			};
 
-			pc.ontrack = (e) =>
-				remoteVideo.current ? (remoteVideo.current.srcObject = e.streams[0]) : console.log('remoteVideo.current is null');
+			pc.ontrack = (e) => {
+				if (remoteVideo.current) {
+					// Make sure we're using the most recent stream
+					remoteVideo.current.srcObject = e.streams[0];
+					alert('Remote vide has been added to the pc tracks');
+				} else {
+					console.log('remoteVideo.current is null');
+				}
+			};
 
 			if (localStream.current) {
 				localStream.current.getTracks().forEach((track: MediaStreamTrack) => pc.addTrack(track, localStream.current!));
+				alert('Localstream has been tracked to the pc');
 			} else {
 				console.log('localstream is null');
 			}
@@ -247,20 +263,24 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 			await pc.setRemoteDescription(offer.sdp);
 
 			const answer = await pc.createAnswer();
-			ws.send(JSON.stringify({type: 'answer', sdp: answer.sdp}));
+			ws.send(JSON.stringify({type: 'answer', sdp: answer}));
 
 			await pc.setLocalDescription(answer);
+			alert(`Answer has been sent : ${user_id}`);
 		} catch (e) {
 			console.error('Error handling offer : ', e);
+			alert(e);
 		}
 	};
 
 	const handleAnswer = async (answer: OfferAnswerMessage) => {
 		try {
+			console.log('ANSWER FROM : ', answer);
 			const connection = searchConnection(answer);
 
 			if (connection) {
 				await connection.pc.setRemoteDescription(answer.sdp);
+				console.log('ANSWERED REMOTE DESC HAS BEEN ADDED');
 			}
 		} catch (e) {
 			console.error('Error handling answer : ', e);
@@ -282,6 +302,7 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 					};
 
 					await connection.pc.addIceCandidate(iceCandidateInit);
+					console.log('ICE CANDIDATE HAS BEEN ADDED');
 				}
 			}
 		} catch (e) {
@@ -295,6 +316,7 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 
 			// connection already exists
 			if (connection) {
+				console.log('CONNECTION ALREADY EXISTS IN OFFERCALL!');
 				return;
 			}
 
@@ -322,21 +344,32 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 				}
 
 				ws.send(JSON.stringify(message));
+				console.log('ICE CANDIDATE SENT FROM : ', message);
 			};
 
 			// media stream track
-			pc.ontrack = (e) =>
-				remoteVideo.current ? (remoteVideo.current.srcObject = e.streams[0]) : console.log('remoteVideo.current is null');
+			pc.ontrack = (e) => {
+				if (remoteVideo.current) {
+					// Make sure we're using the most recent stream
+					remoteVideo.current.srcObject = e.streams[0];
+				} else {
+					console.log('remoteVideo.current is null');
+				}
+			};
 
 			if (localStream.current) {
 				localStream.current.getTracks().forEach((track: MediaStreamTrack) => pc.addTrack(track, localStream.current!));
+				console.log('LOCALSTREAM HAS BEEN TRACKED');
 			} else {
 				console.log('localstream is null');
 			}
 
 			const offer = await pc.createOffer();
-			ws.send(JSON.stringify({type: 'offer', sdp: offer.sdp, user_id: user_id!}));
+			const offerMessage = {type: 'offer', sdp: offer, user_id: user_id};
+
+			ws.send(JSON.stringify(offerMessage));
 			await pc.setLocalDescription(offer);
+			console.log('OFFER SENT from : ', offerMessage);
 		} catch (e) {
 			console.error('Error making call: ', e);
 		}
@@ -379,12 +412,27 @@ const Meeting = ({params}: {params: Promise<{id: string}>}) => {
 		}
 	}, []);
 
+	useEffect(() => {
+		if (remoteVideo) {
+			console.log('REMOTE VIDEO IS PLAYING');
+		}
+	}, [remoteVideo]);
+
 	return (
 		<main className="w-screen h-screen flex justify-center">
 			<div className="w-1/3 h-1/2 bg-white rounded-md mt-24 flex flex-col justify-between">
-				<div className="border-2 border-red-600">
+				<div className="border-2 border-red-600 flex">
 					<video ref={localVideo} className="" autoPlay playsInline src=" "></video>
-					<video ref={remoteVideo} className="" autoPlay playsInline src=" "></video>
+					<video
+						ref={remoteVideo}
+						className=""
+						autoPlay
+						playsInline
+						src=" "
+						onLoadedMetadata={() => console.log('Remote video metadata loaded')}
+						onCanPlay={() => console.log('Remote video can play')}
+						onPlay={() => console.log('Remote video is playing')}
+					></video>
 				</div>
 
 				<div className="border-1 flex justify-center gap-12">
