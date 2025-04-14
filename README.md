@@ -56,5 +56,10 @@
 
 ---
 
+## Members
+- Henry William Gunadi -> Backend
+- Bryan Thanaya -> Frontend
+- Josh -> ML/Deep learning
+
 ## 📂 Project Structure (High-Level)
 
