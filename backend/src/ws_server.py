@@ -1,11 +1,9 @@
 # web socket for exhanging ice and sdp in signaling between users
 import json
 import asyncio
-import uuid
 from websockets.asyncio.server import serve, broadcast
-from typing import List, TypedDict, Set
+from typing import List
 from websockets import ServerConnection
-from aiortc import MediaStreamTrack, MediaStreamError, RTCPeerConnection, RTCSessionDescription
 from datetime import datetime
 from dotenv import load_dotenv
 import os
