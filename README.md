@@ -56,7 +56,7 @@
 
 ---
 
-## Members
+## Members of TIM MANTAP
 - Henry William Gunadi -> Backend
 - Bryan Thanaya -> Frontend
 - Josh -> ML/Deep learning
