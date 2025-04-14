@@ -52,7 +52,7 @@
 - [ ] Integrate AI speech recognition model
 - [ ] Integrate AI sign language recognition model
 - [ ] Add user interface improvements
-- [ ] Deploy to production
+- [x] Deploy to production -> https://signtalkugmhackathon-production.up.railway.app
 
 ---
 
